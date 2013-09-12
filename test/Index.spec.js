@@ -1,297 +1,282 @@
 'use strict';
 
-describe('MongooseExtension Tests', function () {
+describe('MongooseOAuthPassport Tests', function () {
 
+    var url = require('url');
+    var http = require('http');
+    var reqProxy = http.IncomingMessage.prototype;
+    var Passport = require('passport').Passport;
+    var passport = new Passport();
     var mockgoose = require('Mockgoose');
     var mongoose = require('mongoose');
     mockgoose(mongoose);
     var db = mongoose.createConnection('mongodb://localhost:3001/Whatever');
     var Index = require('../index');
-    var schema = new mongoose.Schema();
-    schema.plugin(Index.plugin, {tableName: 'randomTableName', schema:{name:String}});
+    var schema = new mongoose.Schema({
+        key: {
+            type: String,
+            'default': '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG'
+        },
+        secret: {
+            type: String,
+            'default': '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy'
+        }
+    });
+    schema.statics.consumerKey = function (key, next) {
+        this.findOne({key: key}, next);
+    };
+
+    schema.methods.consumerSecret = function (key, next) {
+        next(null, this.secret);
+    };
+
+    //Add our OAuth Plugin
+    schema.plugin(Index.plugin,
+        {
+            tableName: 'randomTableName',
+            schema: {name: String},
+            passport: passport,
+            consumerKeyMethodName: 'consumerKey',
+            consumerSecretMethodName: 'consumerSecret'
+        });
+
     var Model = db.model('randommodel', schema);
+
+    var initialize = passport.initialize();
+    var session = passport.session();
+    var next = function () {
+    };
+
+    var Request = function () {
+        return {
+            logIn: reqProxy.logIn,
+            logOut: reqProxy.logOut,
+            isAuthenticated: reqProxy.isAuthenticated,
+            isUnauthenticated: reqProxy.isUnauthenticated,
+            connection: {
+                encrypted: false
+            },
+            url: '/oauth/request_token',
+            method: 'POST',
+            setHeader: function () {
+                console.log('Set Header', arguments);
+            }
+        };
+    };
+    var Response = function () {
+        return {
+            setHeader: function () {
+                console.log('Set Header', arguments);
+            },
+            end: function () {
+                console.log('End is being called.', arguments);
+            }
+        };
+    };
+    var Headers = function () {
+        return {
+            host: 'localhost:3001',
+            connection: 'keep-alive',
+            'content-length': '0',
+            authorization: 'OAuth ' +
+                'realm="http://localhost:3001/oauth/request_token",' +
+                'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG",' +
+                'oauth_signature_method="HMAC-SHA1",' +
+                'oauth_timestamp="1378941993",' +
+                'oauth_nonce="XHfvSy",' +
+                'oauth_version="1.0",' +
+                'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"',
+            origin: 'chrome-extension://pchdfiagnfhagoefbaeigofbdnjheddc',
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_6_8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.65 Safari/537.36',
+            accept: '*/*',
+            'accept-encoding': 'gzip,deflate,sdch',
+            'accept-language': 'en-US,en;q=0.8',
+            cookie: 'connect.sid=s%3Aob1O%2BnP3HSW1VaaQSItcGm1K.5En47uEYt01ZdQ0tY%2BXIaf6HyXrHVTRTHkwNBdvuGIc'
+        };
+    };
 
     beforeEach(function (done) {
         mockgoose.reset();
-        done();
+        Model.create({}, function (err) {
+            done(err);
+        });
     });
 
     describe('SHOULD', function () {
 
-        describe('Create dynamic methods', function () {
+        it('Add a requestToken method to our model', function (done) {
+            expect(typeof Model.requestToken === 'function').toBe(true);
+            done();
+        });
 
-            it('Create a static method on the model called createRandomTableName', function (done) {
-                expect(typeof Model.createRandomTableName === 'function').toBeTruthy();
+        it('Call parse method if one supplied', function (done) {
+            var req = new Request();
+            var res = new Response();
+            req.headers = new Headers();
+            var parse = {
+                parse: function () {
+                }
+            };
+            spyOn(parse, 'parse').andCallFake(function (req, next) {
+                next(null, {analytics:'someanalytics'});
+            });
+            spyOn(res, 'end').andCallFake(function (value) {
+                expect(value).toContain('someanalytics');
+                expect(parse.parse).toHaveBeenCalled();
                 done();
             });
+            initialize(req, res, next);
+            session(req, res, next);
+            Model.requestToken(req, res, function () {
+            }, parse.parse);
+        });
 
-            it('Create a method on the model called createRandomTableName', function (done) {
-                Model.create({}, function (err, result) {
-                    expect(err).toBeNull();
-                    expect(result).toBeTruthy();
-                    if (result) {
-                        expect(typeof result.createRandomTableName === 'function').toBeTruthy();
+        describe('Unauthorized', function () {
+
+            it('Respond unauthorized if no params sent', function (done) {
+                var req = new Request();
+                var res = new Response();
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toBe('Unauthorized');
+                    done();
+                });
+                Model.requestToken(req, res, function () {
+                });
+
+            });
+
+            describe('Consumer key', function () {
+                it('Respond unauthorized if no consumer key params sent', function (done) {
+                    var req = new Request();
+                    var res = new Response();
+                    req.headers = new Headers();
+                    req.headers.authorization = 'OAuth ' +
+                        'realm="http://localhost:3001/oauth/request_token",' +
+                        'oauth_signature_method="HMAC-SHA1",' +
+                        'oauth_timestamp="1378941993",' +
+                        'oauth_nonce="XHfvSy",' +
+                        'oauth_version="1.0",' +
+                        'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                    spyOn(res, 'setHeader').andCallFake(function () {
+                        expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="parameter_absent"' ]);
+                    });
+                    spyOn(res, 'end').andCallFake(function (value) {
+                        console.log('End with ', arguments);
+                        expect(value).toEqual('Unauthorized');
                         done();
-                    } else {
-                        done('Error creating model 1');
-                    }
+                    });
+
+                    initialize(req, res, next);
+                    session(req, res, next);
+                    Model.requestToken(req, res, function () {
+                    });
                 });
-            });
 
-            it('Create a static method on the model called findRandomTableName', function (done) {
-                expect(typeof Model.findRandomTableName === 'function').toBeTruthy();
-                done();
-            });
-
-            it('Create a method on the model called findRandomTableName', function (done) {
-                Model.create({}, function (err, result) {
-                    expect(err).toBeNull();
-                    expect(result).toBeTruthy();
-                    if (result) {
-                        expect(typeof result.findRandomTableName === 'function').toBeTruthy();
+                it('Respond unauthorized if invalid consumer key params sent', function (done) {
+                    var req = new Request();
+                    var res = new Response();
+                    req.headers = new Headers();
+                    req.headers.authorization = 'OAuth ' +
+                        'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.wrong",' +
+                        'realm="http://localhost:3001/oauth/request_token",' +
+                        'oauth_signature_method="HMAC-SHA1",' +
+                        'oauth_timestamp="1378941993",' +
+                        'oauth_nonce="XHfvSy",' +
+                        'oauth_version="1.0",' +
+                        'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                    spyOn(res, 'setHeader').andCallFake(function () {
+                        expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="consumer_key_rejected"' ]);
+                    });
+                    spyOn(res, 'end').andCallFake(function (value) {
+                        console.log('End with ', arguments);
+                        expect(value).toEqual('Unauthorized');
                         done();
-                    } else {
-                        done('Error creating model');
-                    }
+                    });
+
+                    initialize(req, res, next);
+                    session(req, res, next);
+                    Model.requestToken(req, res, function () {
+                    });
                 });
             });
 
-            it('Return the extension randomTableName', function (done) {
-                Model.create({}, function (err, result) {
-                    expect(err).toBeNull();
-                    expect(result).toBeTruthy();
-                    if (result) {
-                        expect(typeof result.randomTableName === 'function').toBeTruthy();
-                        result.randomTableName(function (err, result) {
-                            expect(err).toBeNull();
-                            expect(result).toBeDefined();
-                            if (result) {
-                                expect(result.TYPE).toBe('randomtablename');
-                                done(err);
-                            } else {
-                                done('Error returning extension object');
-                            }
-                        });
-                    } else {
-                        done('Error creating model');
-                    }
+            describe('OAuth signature', function () {
+                it('Respond unauthorized if invalid signature params sent', function (done) {
+                    var req = new Request();
+                    var res = new Response();
+                    req.headers = new Headers();
+                    req.headers.authorization = 'OAuth ' +
+                        'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG",' +
+                        'realm="http://localhost:3001/oauth/request_token",' +
+                        'oauth_signature_method="HMAC-SHA1",' +
+                        'oauth_timestamp="1378941993",' +
+                        'oauth_nonce="XHfvSy",' +
+                        'oauth_version="1.0",' +
+                        'oauth_signature="invalid6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                    spyOn(res, 'setHeader').andCallFake(function () {
+                        expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="signature_invalid"' ]);
+                    });
+                    spyOn(res, 'end').andCallFake(function (value) {
+                        console.log('End with ', arguments);
+                        expect(value).toEqual('Unauthorized');
+                        done();
+                    });
+
+                    initialize(req, res, next);
+                    session(req, res, next);
+                    Model.requestToken(req, res, function () {
+                    });
                 });
             });
 
         });
 
-        it('Attach a new extension to the model', function (done) {
-            Model.create({}, function (err, model) {
-                expect(err).toBeNull();
-                expect(model).toBeTruthy();
-                if (model) {
-                    model.createRandomTableName({name: 'TestExtension'},
-                        function (err, result) {
-                            expect(err).toBeNull();
-                            expect(result).toBeDefined();
-                            if (result) {
-                                expect(result.name).toBe('TestExtension');
-                                model.findRandomTableName({}, function (err, result) {
-                                    expect(err).toBeNull();
-                                    expect(result).toBeDefined();
-                                    if (result) {
-                                        expect(result.length).toBe(1);
-                                        expect(result[0].name).toBe('TestExtension');
-                                        done(err);
-                                    } else {
-                                        done('Can not find associated extension');
-                                    }
-                                });
-                            } else {
-                                done('Error creating extension');
-                            }
-                        });
-                } else {
-                    done('Error creating model');
-                }
-            });
-        });
+        describe('Authorized', function () {
 
-        it('Attach multiple extensions to the same model', function (done) {
-            Model.create({}, function (err, model) {
-                expect(err).toBeNull();
-                expect(model).toBeTruthy();
-                if (model) {
-                    model.createRandomTableName({name: 'TestExtension'}, function (err, result) {
+            it('Return a request token and secret when passed a valid set of params pair', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toContain('oauth_callback_confirmed=true');
+                    expect(value).toContain('oauth_token');
+                    expect(value).toContain('oauth_token_secret');
+                    done();
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
+            });
+
+            it('Should create a request token in mongoose', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                spyOn(res, 'end').andCallFake(function (value) {
+                    var oauth = url.parse('http:localhost/?' + value, true).query;
+                    expect(oauth.oauth_token).toBeTruthy();
+                    expect(oauth.oauth_token_secret).toBeTruthy();
+                    expect(oauth.oauth_callback_confirmed).toBeTruthy();
+                    console.log('TOKEN RESPONSE', oauth);
+                    Model.findRandomTableNameRequestTokenbyKey(oauth.oauth_token, function (err, token) {
                         expect(err).toBeNull();
-                        expect(result).toBeTruthy();
-                        model.createRandomTableName({name: 'TestExtension2'}, function (err, result) {
-                            expect(err).toBeNull();
-                            expect(result).toBeTruthy();
-                            model.findRandomTableName({}, function (err, result) {
-                                expect(err).toBeNull();
-                                expect(result).toBeDefined();
-                                if (result) {
-                                    expect(result.length).toBe(2);
-                                    expect(result[0].name).toBe('TestExtension');
-                                    expect(result[1].name).toBe('TestExtension2');
-                                    done(err);
-                                } else {
-                                    done('Can not find associated extension');
-                                }
-                            });
-                        });
-                    });
-                } else {
-                    done('Error creating model');
-                }
-            });
-        });
-
-        it('Be able to find an extension by its name', function (done) {
-            Model.create({}, function (err, model) {
-                expect(err).toBeNull();
-                expect(model).toBeTruthy();
-                if (model) {
-                    model.createRandomTableName({name: 'TestExtension'}, function (err, result) {
-                        expect(err).toBeNull();
-                        expect(result).toBeTruthy();
-                        model.createRandomTableName({name: 'TestExtension2'}, function (err, result) {
-                            expect(err).toBeNull();
-                            expect(result).toBeTruthy();
-                            model.findRandomTableName({name: 'TestExtension2'}, function (err, result) {
-                                expect(err).toBeNull();
-                                expect(result).toBeDefined();
-                                if (result) {
-                                    console.log('RESULT IS', result);
-                                    expect(result.length).toBe(1);
-                                    expect(result[0].name).toBe('TestExtension2');
-                                    done(err);
-                                } else {
-                                    done('Can not find associated extension');
-                                }
-                            });
-                        });
-                    });
-                } else {
-                    done('Error creating model');
-                }
-            });
-        });
-
-        it('Be able to remove Extensions', function (done) {
-            Model.create({}, function (err, model) {
-                expect(err).toBeNull();
-                expect(model).toBeTruthy();
-                if (model) {
-                    model.createRandomTableName({name: 'TestExtension'},
-                        function (err, result) {
-                            expect(err).toBeNull();
-                            expect(result).toBeDefined();
-                            if (result) {
-                                model.removeRandomTableName({name: 'TestExtension'}, function (err, result) {
-                                    expect(err).toBeNull();
-                                    expect(result).toBeDefined();
-                                    if (result) {
-                                        expect(result.name).toBe('TestExtension');
-                                        model.findRandomTableName({name: 'TestExtension'}, function (err, result) {
-                                            expect(err).toBeNull();
-                                            expect(result).toEqual([]);
-                                            done(err);
-                                        });
-                                    } else {
-                                        done('Error removing Extension');
-                                    }
-                                });
-                            } else {
-                                done('Error creating extension');
-                            }
-                        });
-                } else {
-                    done('Error creating model');
-                }
-            });
-        });
-
-        it('Be able to get the model from an extension', function (done) {
-            Model.create({}, function (err, model) {
-                expect(err).toBeNull();
-                expect(model).toBeTruthy();
-                if (model) {
-                    model.createRandomTableName({name: 'TestExtension'}, function (err, app) {
-                        if (app) {
-                            app.findModel(Model, function (err, result) {
-                                expect(err).toBeNull();
-                                expect(result).toBeDefined();
-                                if (result) {
-                                    expect(result._id.toString()).toBe(model._id.toString());
-                                    done(err);
-                                } else {
-                                    done('Error finding associated model');
-                                }
-                            });
+                        expect(token).toBeDefined();
+                        if (token) {
+                            expect(token.secret).toBe(oauth.oauth_token_secret);
+                            done();
                         } else {
-                            done('Error retrieving extension');
+                            done('Error finding token');
                         }
                     });
-                } else {
-                    done('Error creating model');
-                }
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
             });
         });
 
-        it('Be able to find a model by extension', function (done) {
-            Model.create({}, function (err, model) {
-                expect(err).toBeNull();
-                expect(model).toBeTruthy();
-                if (model) {
-                    model.createRandomTableName({name: 'TestExtension'}, function (err, app) {
-                        if (app) {
-                            Model.findByRandomTableName({name: 'TestExtension'}, function (err, result) {
-                                expect(err).toBeNull();
-                                expect(result).toBeDefined();
-                                if (result) {
-                                    expect(result._id.toString()).toBe(model._id.toString());
-                                    done(err);
-                                } else {
-                                    done('Error finding associated model');
-                                }
-                            });
-                        } else {
-                            done('Error retrieving extension');
-                        }
-                    });
-                } else {
-                    done('Error creating model');
-                }
-            });
-        });
-
-        it('Extend the extension schema with the schema passed through the options object', function (done) {
-
-            var schema = new mongoose.Schema();
-            schema.plugin(Index.plugin,
-                {
-                    tableName: 'randomTableName2',
-                    schema: {
-
-                        customType: {
-                            type: Boolean,
-                            'default': true
-                        }
-                    }
-                }
-            );
-            var Model = db.model('randomTableName2', schema);
-
-            Model.create({}, function(err, model){
-                expect(err).toBeNull();
-                expect(model).toBeDefined();
-                if(model){
-                    model.createRandomTableName2({name:'TestExtension'}, function(err, result){
-                        expect(result.name).toBe('TestExtension');
-                        expect(result.customType).toBe(true);
-                        done(err);
-                    });
-                }else{
-                    done('Error creating new model');
-                }
-            });
-        });
     });
+
 });
