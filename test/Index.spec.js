@@ -19,9 +19,8 @@ describe('MongooseOAuthPassport Tests', function () {
         {
             tableName: 'randomTableName',
             schema: {name: String},
-            passport: passport,
-            consumerKeyMethodName: 'consumerKey',
-            consumerSecretMethodName: 'consumerSecret'
+            oauth:true,
+            passport: passport
         });
 
     var Model = db.model('randommodel', schema);
@@ -244,7 +243,7 @@ describe('MongooseOAuthPassport Tests', function () {
                     expect(oauth.oauth_token).toBeTruthy();
                     expect(oauth.oauth_token_secret).toBeTruthy();
                     expect(oauth.oauth_callback_confirmed).toBeTruthy();
-                    Model.findRandomTableNameRequestTokenbyKey(oauth.oauth_token, function (err, token) {
+                    Model.findRandomTableNameRequestTokenByKey(oauth.oauth_token, function (err, token) {
                         expect(err).toBeNull();
                         expect(token).toBeDefined();
                         if (token) {
