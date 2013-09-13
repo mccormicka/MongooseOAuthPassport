@@ -1,5 +1,6 @@
 'use strict';
 
+/*jshint camelcase:false */
 describe('MongooseOAuthPassport Tests', function () {
 
     var url = require('url');
@@ -12,24 +13,7 @@ describe('MongooseOAuthPassport Tests', function () {
     mockgoose(mongoose);
     var db = mongoose.createConnection('mongodb://localhost:3001/Whatever');
     var Index = require('../index');
-    var schema = new mongoose.Schema({
-        key: {
-            type: String,
-            'default': '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG'
-        },
-        secret: {
-            type: String,
-            'default': '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy'
-        }
-    });
-    schema.statics.consumerKey = function (key, next) {
-        this.findOne({key: key}, next);
-    };
-
-    schema.methods.consumerSecret = function (key, next) {
-        next(null, this.secret);
-    };
-
+    var schema = new mongoose.Schema();
     //Add our OAuth Plugin
     schema.plugin(Index.plugin,
         {
@@ -97,8 +81,13 @@ describe('MongooseOAuthPassport Tests', function () {
 
     beforeEach(function (done) {
         mockgoose.reset();
-        Model.create({}, function (err) {
-            done(err);
+        Model.create({}, function (err, result) {
+            console.log('Created model', err, result);
+            result.createRandomTableNameConsumer(function(err, result){
+                result.key = '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG';
+                result.secret = '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy';
+                result.save(done);
+            });
         });
     });
 
@@ -161,7 +150,6 @@ describe('MongooseOAuthPassport Tests', function () {
                         expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="parameter_absent"' ]);
                     });
                     spyOn(res, 'end').andCallFake(function (value) {
-                        console.log('End with ', arguments);
                         expect(value).toEqual('Unauthorized');
                         done();
                     });
@@ -188,7 +176,6 @@ describe('MongooseOAuthPassport Tests', function () {
                         expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="consumer_key_rejected"' ]);
                     });
                     spyOn(res, 'end').andCallFake(function (value) {
-                        console.log('End with ', arguments);
                         expect(value).toEqual('Unauthorized');
                         done();
                     });
@@ -217,7 +204,6 @@ describe('MongooseOAuthPassport Tests', function () {
                         expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="signature_invalid"' ]);
                     });
                     spyOn(res, 'end').andCallFake(function (value) {
-                        console.log('End with ', arguments);
                         expect(value).toEqual('Unauthorized');
                         done();
                     });
@@ -258,7 +244,6 @@ describe('MongooseOAuthPassport Tests', function () {
                     expect(oauth.oauth_token).toBeTruthy();
                     expect(oauth.oauth_token_secret).toBeTruthy();
                     expect(oauth.oauth_callback_confirmed).toBeTruthy();
-                    console.log('TOKEN RESPONSE', oauth);
                     Model.findRandomTableNameRequestTokenbyKey(oauth.oauth_token, function (err, token) {
                         expect(err).toBeNull();
                         expect(token).toBeDefined();
@@ -278,5 +263,4 @@ describe('MongooseOAuthPassport Tests', function () {
         });
 
     });
-
 });
