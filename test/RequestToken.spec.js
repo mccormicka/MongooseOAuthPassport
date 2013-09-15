@@ -1,7 +1,7 @@
 'use strict';
 
 /*jshint camelcase:false */
-describe('MongooseOAuthPassport Tests', function () {
+describe('RequestToken Tests', function () {
 
     var url = require('url');
     var http = require('http');
@@ -42,17 +42,17 @@ describe('MongooseOAuthPassport Tests', function () {
             url: '/oauth/request_token',
             method: 'POST',
             setHeader: function () {
-                console.log('Set Header', arguments);
+//                console.log('Set Header', arguments);
             }
         };
     };
     var Response = function () {
         return {
             setHeader: function () {
-                console.log('Set Header', arguments);
+//                console.log('Set Header', arguments);
             },
             end: function () {
-                console.log('End is being called.', arguments);
+//                console.log('End is being called.', arguments);
             }
         };
     };
@@ -81,7 +81,6 @@ describe('MongooseOAuthPassport Tests', function () {
     beforeEach(function (done) {
         mockgoose.reset();
         Model.create({}, function (err, result) {
-            console.log('Created model', err, result);
             result.createRandomTableNameConsumer(function(err, result){
                 result.key = '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG';
                 result.secret = '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy';
@@ -115,8 +114,8 @@ describe('MongooseOAuthPassport Tests', function () {
             });
             initialize(req, res, next);
             session(req, res, next);
-            Model.requestToken(req, res, function () {
-            }, parse.parse);
+            Model.requestToken(req, res, parse.parse, function () {
+            });
         });
 
         describe('Unauthorized', function () {
@@ -213,7 +212,6 @@ describe('MongooseOAuthPassport Tests', function () {
                     });
                 });
             });
-
         });
 
         describe('Authorized', function () {
@@ -259,7 +257,33 @@ describe('MongooseOAuthPassport Tests', function () {
                 Model.requestToken(req, res, function () {
                 });
             });
-        });
 
+            it('Should create multiple request tokens in mongoose', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                var res2 = new Response();
+
+                spyOn(res, 'end').andCallFake(function () {
+                    spyOn(res2, 'end').andCallFake(function () {
+                        Model.randomTableNameRequestToken(function (err, result) {
+                            result.find({}, function(err, tokens){
+                                expect(err).toBeNull();
+                                expect(tokens.length).toBe(2);
+                                done(err);
+                            });
+                        });
+                    });
+                    initialize(req, res2, next);
+                    session(req, res2, next);
+                    Model.requestToken(req, res2, function () {
+                    });
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
+            });
+        });
     });
 });
