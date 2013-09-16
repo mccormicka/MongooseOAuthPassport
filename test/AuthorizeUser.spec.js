@@ -162,7 +162,6 @@ describe('AuthorizeUser Tests', function () {
                 initialize(req, res, next);
                 session(req, res, next);
                 Model.authorizeUser(req, res, function (err, result) {
-                    console.log('ERROR RESULT', err, result);
                     expect(err).toBeDefined();
                     if (err) {
                         expect(err).toEqual({ name: 'AuthorizationError',
