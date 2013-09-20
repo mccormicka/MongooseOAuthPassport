@@ -19,7 +19,7 @@ describe('RequestToken Tests', function () {
         {
             tableName: 'randomTableName',
             schema: {name: String},
-            oauth:true,
+            oauth: true,
             passport: passport
         });
 
@@ -81,7 +81,7 @@ describe('RequestToken Tests', function () {
     beforeEach(function (done) {
         mockgoose.reset();
         Model.create({}, function (err, result) {
-            result.createRandomTableNameConsumer(function(err, result){
+            result.createRandomTableNameConsumer(function (err, result) {
                 result.key = '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG';
                 result.secret = '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy';
                 result.save(done);
@@ -105,12 +105,15 @@ describe('RequestToken Tests', function () {
                 }
             };
             spyOn(parse, 'parse').andCallFake(function (req, next) {
-                next(null, {analytics:'someanalytics'});
+                next(null, {analytics: 'someanalytics'});
             });
             spyOn(res, 'end').andCallFake(function (value) {
                 expect(value).toContain('someanalytics');
                 expect(parse.parse).toHaveBeenCalled();
                 done();
+            });
+            spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                return true;
             });
             initialize(req, res, next);
             session(req, res, next);
@@ -127,91 +130,149 @@ describe('RequestToken Tests', function () {
                     expect(value).toBe('Unauthorized');
                     done();
                 });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
                 Model.requestToken(req, res, function () {
                 });
-
             });
 
-            describe('Consumer key', function () {
-                it('Respond unauthorized if no consumer key params sent', function (done) {
-                    var req = new Request();
-                    var res = new Response();
-                    req.headers = new Headers();
-                    req.headers.authorization = 'OAuth ' +
-                        'realm="http://localhost:3001/oauth/request_token",' +
-                        'oauth_signature_method="HMAC-SHA1",' +
-                        'oauth_timestamp="1378941993",' +
-                        'oauth_nonce="XHfvSy",' +
-                        'oauth_version="1.0",' +
-                        'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
-                    spyOn(res, 'setHeader').andCallFake(function () {
-                        expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="parameter_absent"' ]);
-                    });
-                    spyOn(res, 'end').andCallFake(function (value) {
-                        expect(value).toEqual('Unauthorized');
-                        done();
-                    });
-
-                    initialize(req, res, next);
-                    session(req, res, next);
-                    Model.requestToken(req, res, function () {
-                    });
+            it('Respond unauthorized if no consumer key params sent', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                req.headers.authorization = 'OAuth ' +
+                    'realm="http://localhost:3001/oauth/request_token",' +
+                    'oauth_signature_method="HMAC-SHA1",' +
+                    'oauth_timestamp="1378941993",' +
+                    'oauth_nonce="XHfvSy",' +
+                    'oauth_version="1.0",' +
+                    'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                spyOn(res, 'setHeader').andCallFake(function () {
+                    expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="parameter_absent"' ]);
                 });
-
-                it('Respond unauthorized if invalid consumer key params sent', function (done) {
-                    var req = new Request();
-                    var res = new Response();
-                    req.headers = new Headers();
-                    req.headers.authorization = 'OAuth ' +
-                        'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.wrong",' +
-                        'realm="http://localhost:3001/oauth/request_token",' +
-                        'oauth_signature_method="HMAC-SHA1",' +
-                        'oauth_timestamp="1378941993",' +
-                        'oauth_nonce="XHfvSy",' +
-                        'oauth_version="1.0",' +
-                        'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
-                    spyOn(res, 'setHeader').andCallFake(function () {
-                        expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="consumer_key_rejected"' ]);
-                    });
-                    spyOn(res, 'end').andCallFake(function (value) {
-                        expect(value).toEqual('Unauthorized');
-                        done();
-                    });
-
-                    initialize(req, res, next);
-                    session(req, res, next);
-                    Model.requestToken(req, res, function () {
-                    });
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toEqual('Unauthorized');
+                    done();
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
                 });
             });
 
-            describe('OAuth signature', function () {
-                it('Respond unauthorized if invalid signature params sent', function (done) {
-                    var req = new Request();
-                    var res = new Response();
-                    req.headers = new Headers();
-                    req.headers.authorization = 'OAuth ' +
-                        'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG",' +
-                        'realm="http://localhost:3001/oauth/request_token",' +
-                        'oauth_signature_method="HMAC-SHA1",' +
-                        'oauth_timestamp="1378941993",' +
-                        'oauth_nonce="XHfvSy",' +
-                        'oauth_version="1.0",' +
-                        'oauth_signature="invalid6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
-                    spyOn(res, 'setHeader').andCallFake(function () {
-                        expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="signature_invalid"' ]);
-                    });
-                    spyOn(res, 'end').andCallFake(function (value) {
-                        expect(value).toEqual('Unauthorized');
-                        done();
-                    });
-
-                    initialize(req, res, next);
-                    session(req, res, next);
-                    Model.requestToken(req, res, function () {
-                    });
+            it('Respond unauthorized if invalid consumer key params sent', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                req.headers.authorization = 'OAuth ' +
+                    'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.wrong",' +
+                    'realm="http://localhost:3001/oauth/request_token",' +
+                    'oauth_signature_method="HMAC-SHA1",' +
+                    'oauth_timestamp="1378941993",' +
+                    'oauth_nonce="XHfvSy",' +
+                    'oauth_version="1.0",' +
+                    'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                spyOn(res, 'setHeader').andCallFake(function () {
+                    expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="consumer_key_rejected"' ]);
+                });
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toEqual('Unauthorized');
+                    done();
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
                 });
             });
+
+            it('Respond unauthorized if invalid signature params sent', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                req.headers.authorization = 'OAuth ' +
+                    'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG",' +
+                    'realm="http://localhost:3001/oauth/request_token",' +
+                    'oauth_signature_method="HMAC-SHA1",' +
+                    'oauth_timestamp="1378941993",' +
+                    'oauth_nonce="XHfvSy",' +
+                    'oauth_version="1.0",' +
+                    'oauth_signature="invalid6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                spyOn(res, 'setHeader').andCallFake(function () {
+                    expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="signature_invalid"' ]);
+                });
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toEqual('Unauthorized');
+                    done();
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
+            });
+
+
+            it('Respond unauthorized if invalid timestamp param sent', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                req.headers.authorization = 'OAuth ' +
+                    'realm="http://localhost:3001/oauth/request_token",' +
+                    'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG",' +
+                    'oauth_signature_method="HMAC-SHA1",' +
+                    'oauth_timestamp="1378941993",' +
+                    'oauth_nonce="XHfvSy",' +
+                    'oauth_version="1.0",' +
+                    'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                spyOn(res, 'setHeader').andCallFake(function () {
+                    expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="nonce_used"' ]);
+                });
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toEqual('Unauthorized');
+                    done();
+                });
+
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
+            });
+
+            it('Respond unauthorized if invalid nonce param sent', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                req.headers.authorization = 'OAuth ' +
+                    'realm="http://localhost:3001/oauth/request_token",' +
+                    'oauth_consumer_key="$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG",' +
+                    'oauth_signature_method="HMAC-SHA1",' +
+                    'oauth_timestamp="1378941993",' +
+                    'oauth_nonce="XHfvS",' +
+                    'oauth_version="1.0",' +
+                    'oauth_signature="6nbK%2F2FOS2B2wl4wNEHcICT32zY%3D"';
+                spyOn(res, 'setHeader').andCallFake(function () {
+                    expect(arguments[1]).toEqual([ 'OAuth realm="Clients", oauth_problem="signature_invalid"' ]);
+                });
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toEqual('Unauthorized');
+                    done();
+                });
+
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
+            });
+
         });
 
         describe('Authorized', function () {
@@ -225,6 +286,9 @@ describe('RequestToken Tests', function () {
                     expect(value).toContain('oauth_token');
                     expect(value).toContain('oauth_token_secret');
                     done();
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
                 });
                 initialize(req, res, next);
                 session(req, res, next);
@@ -252,6 +316,9 @@ describe('RequestToken Tests', function () {
                         }
                     });
                 });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
                 initialize(req, res, next);
                 session(req, res, next);
                 Model.requestToken(req, res, function () {
@@ -267,17 +334,54 @@ describe('RequestToken Tests', function () {
                 spyOn(res, 'end').andCallFake(function () {
                     spyOn(res2, 'end').andCallFake(function () {
                         Model.randomTableNameRequestToken(function (err, result) {
-                            result.find({}, function(err, tokens){
+                            result.find({}, function (err, tokens) {
                                 expect(err).toBeNull();
                                 expect(tokens.length).toBe(2);
                                 done(err);
                             });
                         });
                     });
+                    spyOn(Model, 'findRandomTableNameConsumerNonce').andCallFake(function(options, next){
+                        return next(null, []);
+                    });
                     initialize(req, res2, next);
                     session(req, res2, next);
                     Model.requestToken(req, res2, function () {
                     });
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.requestToken(req, res, function () {
+                });
+            });
+
+            it('Should create a ConsumerNonce token in mongoose', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                spyOn(res, 'end').andCallFake(function (value) {
+                    var oauth = url.parse('http:localhost/?' + value, true).query;
+                    expect(oauth.oauth_token).toBeTruthy();
+                    expect(oauth.oauth_token_secret).toBeTruthy();
+                    expect(oauth.oauth_callback_confirmed).toBeTruthy();
+
+                    Model.findRandomTableNameConsumerNonce({nonce:'XHfvSy'}, function (err, token) {
+                        expect(err).toBeNull();
+                        expect(token.length).toBe(1);
+                        if (token.length) {
+                            expect(token[0].timestamp).toBe('1378941993');
+                            expect(token[0].nonce).toBe('XHfvSy');
+                            done();
+                        } else {
+                            done('Error finding ConsumerNonce');
+                        }
+                    });
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
                 });
                 initialize(req, res, next);
                 session(req, res, next);

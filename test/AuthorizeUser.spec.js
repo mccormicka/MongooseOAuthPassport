@@ -161,7 +161,7 @@ describe('AuthorizeUser Tests', function () {
                 req.query.oauth_token = 'invalid_token';
                 initialize(req, res, next);
                 session(req, res, next);
-                Model.authorizeUser(req, res, function (err, result) {
+                Model.authorizeUser(req, res, function (err) {
                     expect(err).toBeDefined();
                     if (err) {
                         expect(err).toEqual({ name: 'AuthorizationError',
