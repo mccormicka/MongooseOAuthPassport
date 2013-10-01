@@ -1,7 +1,7 @@
 'use strict';
 
 /*jshint camelcase:false */
-describe('RequestToken Tests', function () {
+describe('01 - RequestToken Tests', function () {
 
     var url = require('url');
     var http = require('http');
@@ -219,7 +219,6 @@ describe('RequestToken Tests', function () {
                 Model.requestToken(req, res, function () {
                 });
             });
-
 
             it('Respond unauthorized if invalid timestamp param sent', function (done) {
                 var req = new Request();

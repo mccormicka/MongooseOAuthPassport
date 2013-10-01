@@ -1,7 +1,7 @@
 'use strict';
 
 /*jshint camelcase:false */
-describe('AuthorizeUser Tests', function () {
+describe('02 - AuthorizeUser Tests', function () {
 
     var CONSUMER_KEY = '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG';
     var CONSUMER_SECRET = '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy';
@@ -98,6 +98,11 @@ describe('AuthorizeUser Tests', function () {
 
     describe('SHOULD', function () {
 
+        it('Add a authorizeUser method to our model', function (done) {
+            expect(typeof Model.authorizeUser === 'function').toBe(true);
+            done();
+        });
+
         it('Call parse method if one supplied', function (done) {
             var req = new Request();
             var res = new Response();
@@ -122,6 +127,7 @@ describe('AuthorizeUser Tests', function () {
         });
 
         describe('Authorized', function () {
+
             it('Add oauthorization params to req if valid', function (done) {
                 var req = new Request();
                 var res = new Response();
@@ -154,7 +160,7 @@ describe('AuthorizeUser Tests', function () {
         });
 
         describe('UnAuthorized', function () {
-            it('Add oauthorization params to req if valid', function (done) {
+            it('Should throw an error if token is invalid', function (done) {
                 var req = new Request();
                 var res = new Response();
                 req.headers = new Headers();
