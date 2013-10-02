@@ -80,20 +80,26 @@ describe('04 - AccessToken Tests', function () {
         };
     };
 
+    var model;
+    var consumer;
+    var requestToken;
+
     beforeEach(function (done) {
         mockgoose.reset();
-        Model.create({}, function (err, model) {
-            model.createRandomTableNameConsumer(function (err, consumer) {
+        Model.create({}, function (err, models) {
+            model = models;
+            model.createRandomTableNameConsumer(function (err, consumers) {
+                consumer = consumers;
                 consumer.key = CONSUMER_KEY;
                 consumer.secret = CONSUMER_SECRET;
                 consumer.save(function () {
-                    model.createRandomTableNameRequestToken(function (err, requestToken) {
+                    model.createRandomTableNameRequestToken(function (err, requestTokens) {
+                        requestToken = requestTokens;
                         requestToken.key = REQUEST_TOKEN;
                         requestToken.secret = REQUEST_SECRET;
                         requestToken.verifier = VERIFIER;
                         requestToken.save(function () {
                             model.save(function () {
-                                console.log('Consumer ---- ', consumer, model);
                                 done();
                             });
                         });
@@ -101,6 +107,11 @@ describe('04 - AccessToken Tests', function () {
                 });
             });
         });
+    });
+
+    afterEach(function(done){
+        mockgoose.reset();
+        done();
     });
 
     describe('SHOULD', function () {
@@ -116,10 +127,11 @@ describe('04 - AccessToken Tests', function () {
                 var res = new Response();
                 req.headers = new Headers();
                 spyOn(res, 'end').andCallFake(function (value) {
-                    expect(value).toBe('oauth_token=1234&oauth_token_secret=12345');
+                    expect(value).toContain('oauth_token=');
+                    expect(value).toContain('&oauth_token_secret=');
                     done();
                 });
-                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function () {
                     return true;
                 });
                 initialize(req, res, next);
@@ -129,10 +141,30 @@ describe('04 - AccessToken Tests', function () {
             });
 
             it('Add an access token to Mongoose', function (done) {
-                expect(false).toBeTruthy();
-                done();
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                spyOn(res, 'end').andCallFake(function () {
+                    model.RandomTableNameAccessToken().find({}, function(err, results){
+                        expect(err).toBeNull();
+                        expect(results).toBeDefined();
+                        if(results){
+                            expect(results.length).toBe(1);
+                            expect(results[0].modelId).toBe(model._id.toString());
+                            done(err);
+                        }else{
+                            done('Error retrieving Access tokens');
+                        }
+                    });
+                });
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function () {
+                    return true;
+                });
+                initialize(req, res, next);
+                session(req, res, next);
+                Model.accessToken(req, res, function () {
+                });
             });
-
 
         });
 
@@ -162,7 +194,7 @@ describe('04 - AccessToken Tests', function () {
                     expect(value).toBe('Unauthorized');
                     done();
                 });
-                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function () {
                     return true;
                 });
                 initialize(req, res, next);
@@ -182,12 +214,32 @@ describe('04 - AccessToken Tests', function () {
                     expect(value).toBe('Unauthorized');
                     done();
                 });
-                spyOn(Model, 'isValidTimeStamp').andCallFake(function(){
+                spyOn(Model, 'isValidTimeStamp').andCallFake(function () {
                     return true;
                 });
                 initialize(req, res, next);
                 session(req, res, next);
                 Model.accessToken(req, res, function () {
+                });
+            });
+
+            it('Return an error if the request consumer is not the same as the requesttoken consumer', function (done) {
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                requestToken.update({modelId: 'fakeconsumer!!'}, function () {
+
+                    spyOn(res, 'end').andCallFake(function (value) {
+                        expect(value).toBe('oauth_problem=token_rejected&oauth_problem_advice=access%20token%20not%20issued');
+                        done();
+                    });
+                    spyOn(Model, 'isValidTimeStamp').andCallFake(function () {
+                        return true;
+                    });
+                    initialize(req, res, next);
+                    session(req, res, next);
+                    Model.accessToken(req, res, function () {
+                    });
                 });
             });
         });
