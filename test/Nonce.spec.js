@@ -1,7 +1,7 @@
 'use strict';
 
 /*jshint camelcase:false */
-describe('Consumer Tests', function () {
+describe('Nonce Tests', function () {
 
     var moment = require('moment');
     var oauthorize = require('oauthorize').createServer();
@@ -11,10 +11,10 @@ describe('Consumer Tests', function () {
     var mongoose = require('mongoose');
     mockgoose(mongoose);
     var db = mongoose.createConnection('mongodb://localhost:3001/Whatever');
-    var Consumer = require('../lib/Consumer');
+    var Nonce = require('../lib/Nonce');
     var schema = new mongoose.Schema();
     //Add our OAuth Plugin
-    schema.plugin(Consumer,
+    schema.plugin(Nonce,
         {
             tableName: 'randomTableNameConsumer',
             passport: passport,
