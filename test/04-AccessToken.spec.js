@@ -9,7 +9,6 @@ describe('04 - AccessToken Tests', function () {
     var REQUEST_SECRET = '$2a$04$UEhqkdECFTnaZj1N58feIe64HGpL6REz0X2/VQOM1ZD57XQxcsZwa';
     var VERIFIER = '$2a$10$HgYEkMk3UuJexTBHYtV77e8kZWsNlSHgN9S7pHS/rGzkrR2OtucrO';
 
-    var url = require('url');
     var http = require('http');
     var reqProxy = http.IncomingMessage.prototype;
     var Passport = require('passport').Passport;
