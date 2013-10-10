@@ -15,7 +15,7 @@ describe('03 - UserDecision Tests', function () {
     var reqProxy = http.IncomingMessage.prototype;
     var Passport = require('passport').Passport;
     var passport = new Passport();
-    var mockgoose = require('Mockgoose');
+    var mockgoose = require('mockgoose');
     var mongoose = require('mongoose');
     mockgoose(mongoose);
     var db = mongoose.createConnection('mongodb://localhost:3001/Whatever');
