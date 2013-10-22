@@ -20,7 +20,8 @@ describe('01 - RequestToken Tests', function () {
             tableName: 'randomTableName',
             schema: {name: String},
             oauth: true,
-            passport: passport
+            passport: passport,
+            version:'1.0'
         });
 
     var Model = db.model('randommodel', schema);
@@ -271,7 +272,6 @@ describe('01 - RequestToken Tests', function () {
                 Model.requestToken(req, res, function () {
                 });
             });
-
         });
 
         describe('Authorized', function () {
@@ -387,6 +387,54 @@ describe('01 - RequestToken Tests', function () {
                 Model.requestToken(req, res, function () {
                 });
             });
+        });
+
+        describe('1.0a', function () {
+
+            var ModelA;
+            beforeEach(function(done){
+                var schemaA = new mongoose.Schema();
+                //Add our OAuth Plugin
+                schemaA.plugin(Index.plugin,
+                    {
+                        tableName: 'randomTableNameA',
+                        schema: {name: String},
+                        oauth: true,
+                        passport: passport,
+                        version:'1.0a'
+                    });
+                ModelA = db.model('randommodelA', schemaA);
+                ModelA.create({}, function (err, result) {
+                    result.createRandomTableNameAConsumer(function (err, result) {
+                        result.key = '$2a$04$9WIDR8lZY/tKwFI8sBcYTulhp.z9AvJ6lMgLNXRvh8vOM9APM.zrG';
+                        result.secret = '$2a$04$9WIDR8lZY/tKwFI8sBcYTuRMjA0SkURD2Bw9.DAZWnbiEWrHRZzEy';
+                        result.save(done);
+                    });
+                });
+            });
+
+            it('Respond unauthorized if 1.0a and no callback sent', function (done) {
+
+                var req = new Request();
+                var res = new Response();
+                req.headers = new Headers();
+                spyOn(res, 'end').andCallFake(function (value) {
+                    expect(value).toContain('oauth_problem=parameter_absent%26' +
+                        'oauth_parameters_absent%3DcallbackURL&oauth_problem_advice=' +
+                        'You%20must%20include%20a%20callbackURL%20in%20your%20request%20for%20a%20token');
+                    done();
+                });
+
+                spyOn(ModelA, 'isValidTimeStamp').andCallFake(function(){
+                    return true;
+                });
+
+                initialize(req, res, next);
+                session(req, res, next);
+                ModelA.requestToken(req, res, function () {
+                });
+            });
+
         });
     });
 });
